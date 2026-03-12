@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-03-12T11:37:51.378Z",
+  "timestamp": "2026-03-12T15:41:24.463Z",
   "phase1": [
     {
       "dataset": "small-tabular",
@@ -31,6 +31,13 @@
           "tokens": 42,
           "bytes": 115,
           "savings": "-52.8%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 38,
+          "bytes": 119,
+          "savings": "-57.3%",
           "roundTrip": true
         }
       ]
@@ -66,6 +73,13 @@
           "bytes": 553,
           "savings": "-69.9%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 216,
+          "bytes": 717,
+          "savings": "-71.6%",
+          "roundTrip": true
         }
       ]
     },
@@ -99,6 +113,13 @@
           "tokens": 880,
           "bytes": 2243,
           "savings": "-77.2%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 1012,
+          "bytes": 3995,
+          "savings": "-73.8%",
           "roundTrip": true
         }
       ]
@@ -134,6 +155,13 @@
           "bytes": 200,
           "savings": "-37.4%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 85,
+          "bytes": 243,
+          "savings": "-20.6%",
+          "roundTrip": true
         }
       ]
     },
@@ -168,6 +196,13 @@
           "bytes": 208,
           "savings": "-50.0%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 67,
+          "bytes": 219,
+          "savings": "-55.3%",
+          "roundTrip": true
         }
       ]
     },
@@ -200,6 +235,13 @@
           "format": "ZON",
           "tokens": 19,
           "bytes": 52,
+          "savings": "-62.0%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 19,
+          "bytes": 60,
           "savings": "-62.0%",
           "roundTrip": true
         }
@@ -236,6 +278,13 @@
           "bytes": 274,
           "savings": "-38.9%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 101,
+          "bytes": 370,
+          "savings": "-39.5%",
+          "roundTrip": true
         }
       ]
     },
@@ -269,6 +318,13 @@
           "tokens": 135,
           "bytes": 388,
           "savings": "-59.3%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 106,
+          "bytes": 392,
+          "savings": "-68.1%",
           "roundTrip": true
         }
       ]
@@ -304,6 +360,13 @@
           "bytes": 92,
           "savings": "-26.5%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 34,
+          "bytes": 97,
+          "savings": "-30.6%",
+          "roundTrip": true
         }
       ]
     },
@@ -337,6 +400,13 @@
           "tokens": 76,
           "bytes": 229,
           "savings": "-42.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 70,
+          "bytes": 237,
+          "savings": "-47.0%",
           "roundTrip": true
         }
       ]
@@ -372,6 +442,13 @@
           "bytes": 717,
           "savings": "-18.8%",
           "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 192,
+          "bytes": 715,
+          "savings": "-23.2%",
+          "roundTrip": true
         }
       ]
     },
@@ -405,6 +482,13 @@
           "tokens": 41,
           "bytes": 98,
           "savings": "-37.9%",
+          "roundTrip": true
+        },
+        {
+          "format": "LEAN",
+          "tokens": 43,
+          "bytes": 105,
+          "savings": "-34.8%",
           "roundTrip": true
         }
       ]

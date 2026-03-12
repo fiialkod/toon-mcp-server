@@ -220,6 +220,49 @@ function encodeArrayValue(path: string, arr: LeanValue[], lines: string[], inden
     return;
   }
 
+  // Semi-tabular: all items are objects with all-scalar values but different keys
+  const allObjects = arr.every(item => typeof item === "object" && item !== null && !Array.isArray(item));
+  if (allObjects) {
+    const objects = arr as Record<string, LeanValue>[];
+    const allScalarValues = objects.every(obj => Object.values(obj).every(v => isScalar(v)));
+    if (allScalarValues && objects.length >= 2) {
+      // Find keys present in 100% of items
+      const sharedKeys = Object.keys(objects[0]).filter(k =>
+        objects.every(obj => Object.prototype.hasOwnProperty.call(obj, k))
+      );
+
+      if (sharedKeys.length > 0) {
+        sharedKeys.forEach(validateKey);
+        const sharedSet = new Set(sharedKeys);
+
+        // Build semi-tabular encoding
+        const semiLines: string[] = [];
+        semiLines.push(`${pad}${prefix}[${arr.length}]:${sharedKeys.join("\t")}\t~`);
+        for (const obj of objects) {
+          const factored = sharedKeys.map(k => cellEncode(obj[k]));
+          const remaining = Object.entries(obj)
+            .filter(([k]) => !sharedSet.has(k))
+            .map(([k, v]) => { validateKey(k); return `${k}:${cellEncode(v)}`; });
+          const cells = [...factored, ...remaining];
+          semiLines.push(`${pad}  ${cells.join("\t")}`);
+        }
+
+        // Build dashed-list encoding for comparison
+        const dashedLines: string[] = [];
+        dashedLines.push(`${pad}${prefix}[${arr.length}]:`);
+        for (const item of arr) {
+          encodeListItem(item, dashedLines, indent + 1);
+        }
+
+        // Pick shorter
+        const semiCost = semiLines.reduce((s, l) => s + l.length + 1, 0);
+        const dashedCost = dashedLines.reduce((s, l) => s + l.length + 1, 0);
+        lines.push(...(semiCost < dashedCost ? semiLines : dashedLines));
+        return;
+      }
+    }
+  }
+
   // Non-uniform / mixed array
   lines.push(`${pad}${prefix}[${arr.length}]:`);
   for (const item of arr) {
@@ -363,8 +406,7 @@ function parseCellValue(s: string): LeanValue {
   return s;
 }
 
-function parseTabRow(line: string): LeanValue[] {
-  // Split by tab, respecting quoted fields
+function splitTabCells(line: string): string[] {
   const cells: string[] = [];
   let current = "";
   let inQuotes = false;
@@ -393,7 +435,11 @@ function parseTabRow(line: string): LeanValue[] {
   }
   cells.push(current);
   if (inQuotes) throw new Error(`Unterminated quote in row: "${line}"`);
-  return cells.map(parseCellValue);
+  return cells;
+}
+
+function parseTabRow(line: string): LeanValue[] {
+  return splitTabCells(line).map(parseCellValue);
 }
 
 function getIndent(line: string): number {
@@ -441,13 +487,13 @@ function setNestedValue(
 const kvRegex = /^([\w][\w.-]*):(.*)/; // key:value — dots allowed in KEY for dot-flattened paths
 const emptyObjRegex = /^([\w][\w.-]*):\{\}\s*$/;
 const blockRegex = /^([\w][\w.-]*):\s*$/;
-const tabularRegex = /^([\w][\w.-]*)\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*)\s*$/;
+const tabularRegex = /^([\w][\w.-]*)\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*(?:\t~)?)\s*$/;
 const flatArrayRegex = /^([\w][\w.-]*)\[(\d+)\]:(.+)$/;
 const emptyArrayRegex = /^([\w][\w.-]*)\[0\]:\s*$/;
 const nonUniformRegex = /^([\w][\w.-]*)\[([1-9]\d*)\]:\s*$/;
 
 // Root array patterns (no key prefix)
-const rootTabularRegex = /^\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*)\s*$/;
+const rootTabularRegex = /^\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*(?:\t~)?)\s*$/;
 const rootFlatRegex = /^\[(\d+)\]:(.+)$/;
 const rootEmptyRegex = /^\[0\]:\s*$/;
 const rootNonUniformRegex = /^\[([1-9]\d*)\]:\s*$/;
@@ -459,11 +505,11 @@ const listItemKvRegex = /^-\s+([\w][\w-]*):(.*)/;
 const listItemBlockRegex = /^-\s+([\w][\w-]*):\s*$/;
 const listItemEmptyArrayRegex = /^-\s+([\w][\w-]*)\[0\]:\s*$/;
 const listItemNonUniformRegex = /^-\s+([\w][\w-]*)\[([1-9]\d*)\]:\s*$/;
-const listItemTabularRegex = /^-\s+([\w][\w-]*)\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*)\s*$/;
+const listItemTabularRegex = /^-\s+([\w][\w-]*)\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*(?:\t~)?)\s*$/;
 const listItemRootArrayRegex = /^-\s+\[(\d+)\]:(.*)/;
 const listItemRootEmptyRegex = /^-\s+\[0\]:\s*$/;
 const listItemRootNonUniformRegex = /^-\s+\[([1-9]\d*)\]:\s*$/;
-const listItemRootTabularRegex = /^-\s+\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*)\s*$/;
+const listItemRootTabularRegex = /^-\s+\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*(?:\t~)?)\s*$/;
 const listItemEmptyObjKeyRegex = /^-\s+([\w][\w-]*):\{\}\s*$/;
 
 export function decode(lean: string): LeanValue {
@@ -536,6 +582,8 @@ function parseRootArray(state: ParseState): LeanValue[] {
   if (tabM) {
     const count = parseInt(tabM[1], 10);
     const fields = tabM[2].split("\t");
+    const semiTabular = fields.length > 0 && fields[fields.length - 1] === "~";
+    if (semiTabular) fields.pop();
 
     // Peek: tabular arrays have indented data rows; flat arrays do not
     let peekIdx = state.i + 1;
@@ -544,7 +592,7 @@ function parseRootArray(state: ParseState): LeanValue[] {
 
     if (nextIsDataRow) {
       state.i++;
-      return parseTabularRows(state, count, fields, 2, line);
+      return parseTabularRows(state, count, fields, 2, line, semiTabular);
     }
     // Fall through to flat array parsing below
   }
@@ -572,7 +620,7 @@ function parseRootArray(state: ParseState): LeanValue[] {
 
 function parseTabularRows(
   state: ParseState, count: number, fields: string[],
-  minIndent: number, headerContent: string
+  minIndent: number, headerContent: string, semiTabular: boolean = false
 ): LeanValue[] {
   // Check for duplicate fields
   const seen = new Set<string>();
@@ -586,13 +634,35 @@ function parseTabularRows(
     const rowLine = state.lines[state.i];
     if (rowLine.trim() === "") { state.i++; continue; }
     if (getIndent(rowLine) < minIndent) break;
-    const values = parseTabRow(rowLine.trim());
-    if (values.length !== fields.length) {
-      throw new LeanParseError(state.i, rowLine.trim(), `Row field count mismatch (expected ${fields.length}, got ${values.length})`);
+
+    if (semiTabular) {
+      const cells = splitTabCells(rowLine.trim());
+      if (cells.length < fields.length) {
+        throw new LeanParseError(state.i, rowLine.trim(), `Row field count mismatch (expected at least ${fields.length}, got ${cells.length})`);
+      }
+      const obj: Record<string, LeanValue> = {};
+      fields.forEach((f, idx) => { obj[f] = parseCellValue(cells[idx]); });
+      // Extra cells are key:value pairs
+      for (let c = fields.length; c < cells.length; c++) {
+        const cell = cells[c];
+        const colonIdx = cell.indexOf(":");
+        if (colonIdx === -1) {
+          throw new LeanParseError(state.i, rowLine.trim(), `Semi-tabular extra cell missing key:value format: "${cell}"`);
+        }
+        const key = cell.slice(0, colonIdx);
+        const rawVal = cell.slice(colonIdx + 1);
+        setKeyOrThrow(obj, key, parseCellValue(rawVal), state.i, rowLine.trim());
+      }
+      rows.push(obj);
+    } else {
+      const values = parseTabRow(rowLine.trim());
+      if (values.length !== fields.length) {
+        throw new LeanParseError(state.i, rowLine.trim(), `Row field count mismatch (expected ${fields.length}, got ${values.length})`);
+      }
+      const obj: Record<string, LeanValue> = {};
+      fields.forEach((f, idx) => { obj[f] = values[idx]; });
+      rows.push(obj);
     }
-    const obj: Record<string, LeanValue> = {};
-    fields.forEach((f, idx) => { obj[f] = values[idx]; });
-    rows.push(obj);
     state.i++;
   }
 
@@ -623,13 +693,15 @@ function parseListItems(state: ParseState, baseIndent: number, count: number): L
     if (liRootTabM) {
       const cnt = parseInt(liRootTabM[1], 10);
       const fields = liRootTabM[2].split("\t");
+      const semiTab = fields.length > 0 && fields[fields.length - 1] === "~";
+      if (semiTab) fields.pop();
       // Peek-ahead: tabular has indented data rows, flat does not
       let peekIdx = state.i + 1;
       while (peekIdx < state.lines.length && state.lines[peekIdx].trim() === "") peekIdx++;
       const nextIsData = cnt > 0 && peekIdx < state.lines.length && getIndent(state.lines[peekIdx]) >= ind + 2;
       if (nextIsData) {
         state.i++;
-        arr.push(parseTabularRows(state, cnt, fields, ind + 2, content));
+        arr.push(parseTabularRows(state, cnt, fields, ind + 2, content, semiTab));
         continue;
       }
       // Fall through to flat array below
@@ -708,8 +780,10 @@ function parseListItemObject(
     if (tabM && isTabularItem) {
       const [, key, countStr, fieldsStr] = tabM;
       const fields = fieldsStr.split("\t");
+      const semiTab = fields.length > 0 && fields[fields.length - 1] === "~";
+      if (semiTab) fields.pop();
       state.i++;
-      setKeyOrThrow(obj, key, parseTabularRows(state, parseInt(countStr, 10), fields, lineInd + 2, content), firstLineIdx, content);
+      setKeyOrThrow(obj, key, parseTabularRows(state, parseInt(countStr, 10), fields, lineInd + 2, content, semiTab), firstLineIdx, content);
     }
     // - key[0]:
     else {
@@ -778,6 +852,8 @@ function parseLine(
     const [, path, countStr, fieldsStr] = tabM;
     const count = parseInt(countStr, 10);
     const fields = fieldsStr.split("\t");
+    const semiTab = fields.length > 0 && fields[fields.length - 1] === "~";
+    if (semiTab) fields.pop();
 
     // Peek: tabular arrays have indented data rows; flat arrays do not
     let peekIdx = state.i + 1;
@@ -786,7 +862,7 @@ function parseLine(
 
     if (nextIsDataRow) {
       state.i++;
-      setNestedValue(target, path, parseTabularRows(state, count, fields, ind + 2, content), lineIdx, content);
+      setNestedValue(target, path, parseTabularRows(state, count, fields, ind + 2, content, semiTab), lineIdx, content);
       return;
     }
     // Fall through to flat array parsing below

@@ -94,6 +94,48 @@ test('non-scalar first value', () => assertRoundTrip({
   items: [{ config: { host: "localhost", port: 8080 } }, { config: { host: "remote", port: 9090 } }]
 }));
 
+console.log('\n-- semi-tabular arrays --');
+test('basic semi-tabular round-trips', () => {
+  assertRoundTrip({ t: [{ k: "a", v: 1 }, { k: "b", v: 2, x: true }] });
+});
+test('semi-tabular uses ~ marker', () => {
+  const data = { events: [
+    { type: "click", target: "btn" },
+    { type: "pageview", url: "/home" },
+    { type: "error", message: "oops", severity: "high" }
+  ]};
+  const enc = encode(data);
+  if (!enc.includes('\t~')) throw new Error('Expected ~ marker in semi-tabular header');
+  assertRoundTrip(data);
+});
+test('semi-tabular with special values', () => {
+  assertRoundTrip({ items: [
+    { id: 1, status: true, note: "ok" },
+    { id: 2, status: false, extra: null },
+    { id: 3, status: true, code: "0x1A" }
+  ]});
+});
+test('semi-tabular with quoted kv values', () => {
+  assertRoundTrip({ rows: [
+    { type: "a", msg: "hello\tworld" },
+    { type: "b", msg: "line1\nline2", extra: 42 }
+  ]});
+});
+test('semi-tabular root array', () => {
+  assertRoundTrip([{ type: "a", val: 1 }, { type: "b", val: 2, extra: true }]);
+});
+test('semi-tabular with empty string kv', () => {
+  assertRoundTrip({ items: [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "", tag: "new" }
+  ]});
+});
+test('semi-tabular prefers dashed-list when cheaper', () => {
+  // Single shared key with long extra keys — may prefer dashed list
+  const data = { items: [{ x: 1, longExtraKeyName: "val1" }, { x: 2, anotherLongKey: "val2" }] };
+  assertRoundTrip(data);
+});
+
 console.log('\n-- deep nesting --');
 test('nested array value', () => assertRoundTrip({ g: [{ n: "A", m: [{ id: 1 }, { id: 2 }] }] }));
 test('deeply nested', () => assertRoundTrip({
