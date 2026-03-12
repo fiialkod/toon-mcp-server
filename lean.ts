@@ -11,6 +11,7 @@ export type LeanValue =
   | { [key: string]: LeanValue };
 
 const KEY_REGEX = /^[\w][\w-]*$/;
+const NUMBER_REGEX = /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 
 function validateKey(key: string): void {
   if (!KEY_REGEX.test(key)) {
@@ -42,11 +43,11 @@ function isTabularArray(arr: LeanValue[]): boolean {
 
 // --- Scalar encoding ---
 
-function scalarNeedsQuoting(value: string): boolean {
+function needsQuoting(value: string): boolean {
   if (value === "") return true;
   if (value === "T" || value === "F" || value === "_") return true;
   if (value.trim() !== value) return true;
-  if (!isNaN(Number(value)) && value !== "") return true;
+  if (NUMBER_REGEX.test(value)) return true;
   if (value.includes("\t") || value.includes("\n") || value.includes("\\") || value.includes('"')) return true;
   return false;
 }
@@ -59,7 +60,7 @@ function escapeScalar(value: string): string {
 }
 
 function encodeScalar(value: string, forceQuote: boolean): string {
-  if (forceQuote || scalarNeedsQuoting(value)) {
+  if (forceQuote || needsQuoting(value)) {
     return `"${escapeScalar(value)}"`;
   }
   return value;
@@ -79,15 +80,6 @@ function encodePrimitive(value: LeanValue): string {
 
 // --- Cell encoding (tabular context) ---
 
-function cellNeedsQuoting(value: string): boolean {
-  if (value === "") return true;
-  if (value === "T" || value === "F" || value === "_") return true;
-  if (value.trim() !== value) return true;
-  if (!isNaN(Number(value)) && value !== "") return true;
-  if (value.includes("\t") || value.includes("\n") || value.includes("\\") || value.includes('"')) return true;
-  return false;
-}
-
 function escapeCell(value: string): string {
   return value
     .replace(/\\/g, "\\\\")
@@ -101,7 +93,7 @@ function cellEncode(value: LeanValue): string {
   if (value === false) return "F";
   if (typeof value === "number") return String(value);
   if (typeof value === "string") {
-    if (cellNeedsQuoting(value)) return `"${escapeCell(value)}"`;
+    if (needsQuoting(value)) return `"${escapeCell(value)}"`;
     return value;
   }
   throw new Error("Not a scalar cell value");
@@ -110,7 +102,7 @@ function cellEncode(value: LeanValue): string {
 // --- Encoder ---
 
 export function encode(data: LeanValue): string {
-  if (data === null || data === undefined) return "_";
+  if (data === null) return "_";
   if (typeof data === "boolean") return data ? "T" : "F";
   if (typeof data === "number") {
     if (!isFinite(data)) throw new Error(`Unsupported number: ${data}.`);
@@ -143,11 +135,7 @@ function encodeProperty(path: string, value: LeanValue, lines: string[], indent:
   // Scalar → dot-flatten
   if (isScalar(value)) {
     const pad = "  ".repeat(indent);
-    const encoded = value === null ? "_"
-      : typeof value === "boolean" ? (value ? "T" : "F")
-      : typeof value === "number" ? (isFinite(value) ? String(value) : (() => { throw new Error(`Unsupported: ${value}`); })())
-      : encodeScalar(value, false);
-    lines.push(`${pad}${path}:${encoded}`);
+    lines.push(`${pad}${path}:${encodePrimitive(value)}`);
     return;
   }
 
@@ -185,7 +173,7 @@ function encodeProperty(path: string, value: LeanValue, lines: string[], indent:
 
 function encodeArrayValue(path: string, arr: LeanValue[], lines: string[], indent: number): void {
   const pad = "  ".repeat(indent);
-  const prefix = path ? `${path}` : "";
+  const prefix = path;
 
   if (arr.length === 0) {
     lines.push(`${pad}${prefix}[0]:`);
@@ -257,10 +245,7 @@ function encodeListItem(item: LeanValue, lines: string[], indent: number): void 
   validateKey(firstKey);
 
   if (isScalar(firstVal)) {
-    const sv = firstVal === null ? "_"
-      : typeof firstVal === "boolean" ? (firstVal ? "T" : "F")
-      : typeof firstVal === "number" ? String(firstVal)
-      : encodeScalar(firstVal, false);
+    const sv = encodePrimitive(firstVal);
     lines.push(`${pad}- ${firstKey}:${sv}`);
   } else if (Array.isArray(firstVal)) {
     const subLines: string[] = [];
@@ -342,8 +327,7 @@ function parseScalarValue(s: string): LeanValue {
   if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
     return unescapeScalar(s.slice(1, -1));
   }
-  const n = Number(s);
-  if (Number.isFinite(n) && s !== "") return n;
+  if (NUMBER_REGEX.test(s)) return Number(s);
   return s; // bare string
 }
 
@@ -356,8 +340,7 @@ function parseCellValue(s: string): LeanValue {
   if (s === "F") return false;
   if (s === "_") return null;
   if (s === "") return "";
-  const n = Number(s);
-  if (Number.isFinite(n)) return n;
+  if (NUMBER_REGEX.test(s)) return Number(s);
   return s;
 }
 
@@ -455,7 +438,6 @@ const listItemScalarRegex = /^-\s+(.+)$/;
 const listItemEmptyObjRegex = /^-\s+\{\}\s*$/;
 const listItemKvRegex = /^-\s+([\w][\w-]*):(.*)/;
 const listItemBlockRegex = /^-\s+([\w][\w-]*):\s*$/;
-const listItemArrayRegex = /^-\s+([\w][\w-]*)\[(\d+)\]:(.*)/;
 const listItemEmptyArrayRegex = /^-\s+([\w][\w-]*)\[0\]:\s*$/;
 const listItemNonUniformRegex = /^-\s+([\w][\w-]*)\[([1-9]\d*)\]:\s*$/;
 const listItemTabularRegex = /^-\s+([\w][\w-]*)\[(\d+)\]:([\w][\w-]*(?:\t[\w][\w-]*)*)\s*$/;
