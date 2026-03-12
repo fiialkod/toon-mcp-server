@@ -155,12 +155,31 @@ function encodeProperty(path: string, value: LeanValue, lines: string[], indent:
     return;
   }
 
-  // Always dot-flatten when at indent 0, use indented blocks otherwise
+  // At indent 0: compare dot-flattening vs indented block, pick shorter.
+  // Dot-flattening repeats the full parent path on every leaf line — this costs
+  // more than JSON's braces when paths are long and siblings are few.
+  // Formula: dot-flatten wins when parent_path_length < ~3 + 2/K (K = children).
+  // Rather than estimate, we just try both and measure.
   if (indent === 0) {
+    // Strategy 1: dot-flatten (extend path with dots)
+    const dotLines: string[] = [];
     for (const [key, val] of entries) {
       validateKey(key);
-      encodeProperty(`${path}.${key}`, val, lines, 0);
+      encodeProperty(`${path}.${key}`, val, dotLines, 0);
     }
+
+    // Strategy 2: indented block
+    const blockLines: string[] = [];
+    blockLines.push(`${path}:`);
+    for (const [key, val] of entries) {
+      validateKey(key);
+      encodeProperty(key, val, blockLines, 1);
+    }
+
+    // Pick shorter (character count including newlines)
+    const dotCost = dotLines.reduce((sum, l) => sum + l.length + 1, 0);
+    const blockCost = blockLines.reduce((sum, l) => sum + l.length + 1, 0);
+    lines.push(...(dotCost <= blockCost ? dotLines : blockLines));
   } else {
     const pad = "  ".repeat(indent);
     lines.push(`${pad}${path}:`);

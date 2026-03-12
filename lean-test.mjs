@@ -54,10 +54,14 @@ test('with empty array', () => assertRoundTrip({ items: [] }));
 test('nested empty object', () => assertRoundTrip({ meta: {} }));
 
 console.log('\n-- dot-flattening --');
-test('scalars flatten', () => {
-  const data = { config: { database: { host: "localhost", port: 5432 }, cache: { ttl: 300 } } };
+test('shallow dot-flatten', () => {
+  const data = { meta: { version: "2.1.0", debug: false } };
   const enc = encode(data);
-  if (!enc.includes('config.database.host:')) throw new Error('Expected dot-flattened key');
+  if (!enc.includes('meta.version:')) throw new Error('Expected dot-flattened key for short path');
+  assertRoundTrip(data);
+});
+test('deep nesting prefers blocks', () => {
+  const data = { config: { database: { host: "localhost", port: 5432 }, cache: { ttl: 300 } } };
   assertRoundTrip(data);
 });
 
