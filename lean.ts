@@ -930,3 +930,18 @@ function parseBlock(
     parseLine(state, ind, target, content);
   }
 }
+
+export function estimateTokens(text: string): number {
+  if (!text) return 0;
+  let count = 0;
+  const words = text.split(/\s+/).filter(w => w.length > 0);
+  for (const word of words) {
+    if (word.length <= 4) count += 1;
+    else if (word.length <= 10) count += 2;
+    else count += Math.ceil(word.length / 4);
+    const puncts = word.match(/[{}\[\](),":;|~<>]/g);
+    if (puncts) count += Math.ceil(puncts.length / 2);
+  }
+  count += (text.match(/\n/g) || []).length;
+  return Math.max(count, 1);
+}

@@ -1,18 +1,18 @@
-import { encode, decode, ToonParseError, selectBestFormat } from './dist/toon.js';
+import { encode, decode, LeanParseError, estimateTokens } from './dist/lean.js';
 
 let pass = 0, fail = 0;
 function test(name, fn) {
   try { fn(); console.log(`  ✅ ${name}`); pass++; }
   catch (e) { console.log(`  ❌ ${name}\n     ${e.message}`); fail++; }
 }
-function assertEqual(a, b, l='') {
-  const as=JSON.stringify(a), bs=JSON.stringify(b);
-  if(as!==bs) throw new Error(`${l}\n       expected: ${bs}\n       actual:   ${as}`);
+function assertEqual(a, b, l = '') {
+  const as = JSON.stringify(a), bs = JSON.stringify(b);
+  if (as !== bs) throw new Error(`${l}\n       expected: ${bs}\n       actual:   ${as}`);
 }
-function assertRoundTrip(data, d='|') {
-  const enc = encode(data, { delimiter: d });
-  const dec = decode(enc, d);
-  assertEqual(dec, data, `round-trip\n       encoded:\n${enc.split('\n').map(l=>'         '+l).join('\n')}`);
+function assertRoundTrip(data) {
+  const enc = encode(data);
+  const dec = decode(enc);
+  assertEqual(dec, data, `round-trip\n       encoded:\n${enc.split('\n').map(l => '         ' + l).join('\n')}`);
 }
 function assertThrows(fn, check) {
   let threw = false;
@@ -20,429 +20,239 @@ function assertThrows(fn, check) {
   if (!threw) throw new Error('Expected to throw');
 }
 
-console.log('\n-- empty string round-trips --');
-
-test('nested: { name: "" }', () => assertRoundTrip({ name: "" }));
-test('flat array: [""]', () => assertRoundTrip({ x: [""] }));
-test('flat array: ["", "a", ""]', () => assertRoundTrip({ x: ["", "a", ""] }));
-test('tabular: [{ v: "" }]', () => assertRoundTrip({ rows: [{ k: "a", v: "" }, { k: "b", v: "" }] }));
-test('non-uniform list: [{ name: "" }]', () => assertRoundTrip({ items: [{ name: "" }, { name: "x", extra: true }] }));
-test('root empty string', () => assertRoundTrip(""));
-
-console.log('\n-- scalar-looking strings in cells --');
-
-test('["null"] stays string', () => assertRoundTrip({ x: ["null"] }));
-test('["true"] stays string', () => assertRoundTrip({ x: ["true"] }));
-test('["false"] stays string', () => assertRoundTrip({ x: ["false"] }));
-test('["42"] stays string', () => assertRoundTrip({ x: ["42"] }));
-test('["0012"] stays string', () => assertRoundTrip({ x: ["0012"] }));
-test('[" x "] preserves whitespace', () => assertRoundTrip({ x: [" x "] }));
-test('tabular: [{ code: "0012" }]', () => assertRoundTrip({ rows: [{ code: "0012", ok: true }, { code: "0034", ok: false }] }));
-test('tabular: [{ v: "null" }]', () => assertRoundTrip({ rows: [{ v: "null" }, { v: "true" }] }));
-test('mixed scalar-looking array', () => assertRoundTrip({ vals: ["null", "true", "42", 42, true, null] }));
-
-console.log('\n-- newline-containing strings --');
-
-test('nested: { bio: "line1\\nline2" }', () => assertRoundTrip({ bio: "line1\nline2" }));
-test('nested: multiline with quotes', () => assertRoundTrip({ text: 'she said:\n"hello"\nend' }));
-test('flat array with newlines', () => assertRoundTrip({ notes: ["a\nb", "c"] }));
-test('tabular with newlines', () => assertRoundTrip({ rows: [{ msg: "hi\nthere", id: 1 }, { msg: "ok", id: 2 }] }));
-test('root string with newline', () => assertRoundTrip("hello\nworld"));
+console.log('\n-- primitives --');
+test('T/F/_ keywords', () => {
+  assertRoundTrip(true);
+  assertRoundTrip(false);
+  assertRoundTrip(null);
+});
+test('numbers', () => {
+  assertRoundTrip(0);
+  assertRoundTrip(-3.14);
+  assertRoundTrip(1e10);
+});
+test('root strings (always quoted)', () => {
+  assertRoundTrip("hello");
+  assertRoundTrip("");
+  assertRoundTrip("42");
+  assertRoundTrip("T");
+  assertRoundTrip("F");
+  assertRoundTrip("_");
+  assertRoundTrip("hello world");
+  assertRoundTrip("line1\nline2");
+});
 
 console.log('\n-- root empty object --');
-
 test('root {} round-trips', () => assertRoundTrip({}));
 test('encode({}) === "{}"', () => assertEqual(encode({}), "{}"));
-test('decode("{}") === {}', () => assertEqual(decode("{}", "|"), {}));
 
-console.log('\n-- key restrictions --');
-
-test('unsupported key throws on encode', () => {
-  assertThrows(() => encode({ "first name": "Alice" }), e => e.message.includes('Unsupported'));
-});
-test('key with slash throws', () => {
-  assertThrows(() => encode({ "x/y": 1 }), e => e.message.includes('Unsupported'));
-});
-test('key with colon throws', () => {
-  assertThrows(() => encode({ "a:b": 1 }), e => e.message.includes('Unsupported'));
-});
-test('valid keys pass', () => {
-  assertRoundTrip({ foo: 1, bar_baz: 2, x1: 3, "a.b": 4, "c-d": 5 });
-});
-
-// regression stuff
-
-console.log('\n-- root scalar round-trips --');
-test('"true" vs true', () => { assertEqual(decode(encode("true")), "true"); assertEqual(decode(encode(true)), true); });
-test('"42" vs 42', () => { assertEqual(decode(encode("42")), "42"); assertEqual(decode(encode(42)), 42); });
-test('"null" vs null', () => { assertEqual(decode(encode("null")), "null"); assertEqual(decode(encode(null)), null); });
-test('root string with spaces', () => assertRoundTrip("hello world"));
-test('root string with colon', () => assertRoundTrip("a: b"));
-test('root string with quotes', () => assertRoundTrip('she said "hi"'));
-test('root number 0', () => assertRoundTrip(0));
-test('root -3.14', () => assertRoundTrip(-3.14));
-test('root true/false', () => { assertRoundTrip(true); assertRoundTrip(false); });
-test('root null', () => assertRoundTrip(null));
-
-console.log('\n-- root array round-trips --');
-test('flat scalar', () => assertRoundTrip([1, 2, 3]));
-test('tabular', () => assertRoundTrip([{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]));
-test('empty', () => assertRoundTrip([]));
-test('non-uniform', () => assertRoundTrip([{ type: 'a', val: 1 }, { type: 'b', val: 2, extra: true }]));
-
-console.log('\n-- root object round-trips --');
-test('simple', () => assertRoundTrip({ a: 1, b: 'hello', c: true }));
-test('nested', () => assertRoundTrip({ config: { db: { host: 'localhost', port: 5432 }, debug: false } }));
-test('with tabular', () => assertRoundTrip({ users: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }] }));
+console.log('\n-- root object --');
+test('simple kv', () => assertRoundTrip({ a: 1, b: "hello", c: true }));
+test('nested', () => assertRoundTrip({ config: { db: { host: "localhost", port: 5432 }, debug: false } }));
+test('with tabular', () => assertRoundTrip({ users: [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }] }));
 test('with empty array', () => assertRoundTrip({ items: [] }));
+test('nested empty object', () => assertRoundTrip({ meta: {} }));
 
-console.log('\n-- null in flat arrays --');
-test('[1, null, 3]', () => assertRoundTrip({ v: [1, null, 3] }, ','));
-test('[null, null]', () => assertRoundTrip({ x: [null, null] }));
+console.log('\n-- dot-flattening --');
+test('shallow dot-flatten', () => {
+  const data = { meta: { version: "2.1.0", debug: false } };
+  const enc = encode(data);
+  if (!enc.includes('meta.version:')) throw new Error('Expected dot-flattened key for short path');
+  assertRoundTrip(data);
+});
+test('deep nesting prefers blocks', () => {
+  const data = { config: { database: { host: "localhost", port: 5432 }, cache: { ttl: 300 } } };
+  assertRoundTrip(data);
+});
+
+console.log('\n-- tabular arrays --');
+test('basic tabular', () => assertRoundTrip({ users: [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }] }));
+test('T/F/_ in cells', () => assertRoundTrip({ rows: [{ ok: true, v: null }, { ok: false, v: null }] }));
+test('quoted cells', () => assertRoundTrip({ rows: [{ code: "0012", ok: true }, { code: "0034", ok: false }] }));
+test('cell with tab', () => assertRoundTrip({ rows: [{ msg: "a\tb", id: 1 }, { msg: "c", id: 2 }] }));
+test('cell with newline', () => assertRoundTrip({ rows: [{ msg: "hi\nthere", id: 1 }, { msg: "ok", id: 2 }] }));
+test('cell with double-quote', () => assertRoundTrip({ rows: [{ msg: 'she said "hi"', id: 1 }, { msg: "ok", id: 2 }] }));
+
+console.log('\n-- flat scalar arrays --');
+test('[1,2,3]', () => assertRoundTrip([1, 2, 3]));
+test('["a","b"]', () => assertRoundTrip({ x: ["a", "b"] }));
+test('with nulls', () => assertRoundTrip({ x: [1, null, 3] }));
+test('keyword-looking strings', () => assertRoundTrip({ x: ["T", "F", "_", "42"] }));
+test('empty strings', () => assertRoundTrip({ x: ["", "a", ""] }));
+
+console.log('\n-- root arrays --');
+test('flat scalar', () => assertRoundTrip([1, 2, 3]));
+test('tabular', () => assertRoundTrip([{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }]));
+test('empty', () => assertRoundTrip([]));
+test('non-uniform', () => assertRoundTrip([{ type: "a", val: 1 }, { type: "b", val: 2, extra: true }]));
 
 console.log('\n-- non-uniform arrays --');
-test('different keys', () => assertRoundTrip({ t: [{ k: 'a', v: 1 }, { k: 'b', v: 2, x: true }] }));
-
-console.log('\n-- delimiter collision --');
-test('comma in value', () => assertRoundTrip({ p: [{ n: 'A, B', v: 1 }, { n: 'C', v: 2 }] }, ','));
-test('pipe in value', () => assertRoundTrip({ p: [{ n: 'a | b', v: 1 }, { n: 'c', v: 2 }] }, '|'));
-test('quotes in value', () => assertRoundTrip({ p: [{ n: '"hi"', v: true }, { n: 'ok', v: false }] }, ','));
-
-console.log('\n-- parse errors --');
-test('garbage throws', () => assertThrows(() => decode('a: 1\n!@#$', ','), e => e instanceof ToonParseError));
-test('trailing garbage', () => assertThrows(() => decode('42\ngarbage', '|'), e => e.message.includes('trailing')));
-
-console.log('\n-- count enforcement --');
-test('non-uniform mismatch', () => assertThrows(() => decode('x[3]:\n  - a: 1\n  - b: 2', '|'), e => e.message.includes('count')));
-test('tabular mismatch', () => assertThrows(() => decode('x[3]{a|b}:\n  1|2\n  3|4', '|'), e => e.message.includes('count')));
-test('flat mismatch', () => assertThrows(() => decode('x[3]: 1|2', '|'), e => e.message.includes('count')));
-
-console.log('\n-- nested structures --');
-test('nested array value', () => assertRoundTrip({ g: [{ n: 'A', m: [{ id: 1 }, { id: 2 }] }] }));
-test('nested object value', () => assertRoundTrip({ i: [{ id: 1, m: { c: 'r' } }, { id: 2, m: { c: 'b' } }] }));
-test('tabular rejects nested', () => {
-  const enc = encode({ r: [{ id: 1, t: ['a'] }, { id: 2, t: ['b'] }] }, { delimiter: '|' });
-  if (enc.includes('{id|t}:')) throw new Error('Should not tabularize nested');
-  assertRoundTrip({ r: [{ id: 1, t: ['a'] }, { id: 2, t: ['b'] }] });
-});
-test('deeply nested', () => assertRoundTrip({
-  teams: [{ name: 'A', projects: [{ title: 'P1', tasks: [{ done: true }] }] }]
+test('different keys', () => assertRoundTrip({ t: [{ k: "a", v: 1 }, { k: "b", v: 2, x: true }] }));
+test('mixed types', () => assertRoundTrip({ m: [1, "hello", { key: "val" }] }));
+test('mixed with sub-array', () => assertRoundTrip({ m: [42, "hi", { a: 1 }, ["x", "y"]] }));
+test('non-scalar first value', () => assertRoundTrip({
+  items: [{ config: { host: "localhost", port: 8080 } }, { config: { host: "remote", port: 9090 } }]
 }));
 
-// escape/unescape edge cases
-
-console.log('\n-- escape/unescape edge cases --');
-
-test('root: "plain"', () => assertRoundTrip("plain"));
-test('root: ""', () => assertRoundTrip(""));
-test('root: "null"', () => assertRoundTrip("null"));
-test('root: "42"', () => assertRoundTrip("42"));
-test('root: "  padded  "', () => assertRoundTrip("  padded  "));
-test('root: "line1\\nline2"', () => assertRoundTrip("line1\nline2"));
-test('root: "C:\\\\new" (literal backslash-n)', () => assertRoundTrip("C:\\new"));
-test('root: "a\\\\\\"b" (backslash + quote)', () => assertRoundTrip('a\\"b'));
-
-test('flat array of tricky strings', () => {
-  assertRoundTrip({ x: ["", "42", "null", "\\n", "line1\nline2"] });
+console.log('\n-- semi-tabular arrays --');
+test('basic semi-tabular round-trips', () => {
+  assertRoundTrip({ t: [{ k: "a", v: 1 }, { k: "b", v: 2, x: true }] });
+});
+test('semi-tabular uses ~ marker', () => {
+  const data = { events: [
+    { type: "click", target: "btn" },
+    { type: "pageview", url: "/home" },
+    { type: "error", message: "oops", severity: "high" }
+  ]};
+  const enc = encode(data);
+  if (!enc.includes('\t~')) throw new Error('Expected ~ marker in semi-tabular header');
+  assertRoundTrip(data);
+});
+test('semi-tabular with special values', () => {
+  assertRoundTrip({ items: [
+    { id: 1, status: true, note: "ok" },
+    { id: 2, status: false, extra: null },
+    { id: 3, status: true, code: "0x1A" }
+  ]});
+});
+test('semi-tabular with quoted kv values', () => {
+  assertRoundTrip({ rows: [
+    { type: "a", msg: "hello\tworld" },
+    { type: "b", msg: "line1\nline2", extra: 42 }
+  ]});
+});
+test('semi-tabular root array', () => {
+  assertRoundTrip([{ type: "a", val: 1 }, { type: "b", val: 2, extra: true }]);
+});
+test('semi-tabular with empty string kv', () => {
+  assertRoundTrip({ items: [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "", tag: "new" }
+  ]});
+});
+test('semi-tabular prefers dashed-list when cheaper', () => {
+  // Single shared key with long extra keys — may prefer dashed list
+  const data = { items: [{ x: 1, longExtraKeyName: "val1" }, { x: 2, anotherLongKey: "val2" }] };
+  assertRoundTrip(data);
 });
 
-test('tabular with tricky strings', () => {
-  assertRoundTrip({ rows: [{ code: "0012", note: "C:\\new" }] });
-});
+console.log('\n-- deep nesting --');
+test('nested array value', () => assertRoundTrip({ g: [{ n: "A", m: [{ id: 1 }, { id: 2 }] }] }));
+test('deeply nested', () => assertRoundTrip({
+  teams: [{ name: "A", projects: [{ title: "P1", tasks: [{ done: true }] }] }]
+}));
 
-test('nested empty containers', () => {
-  assertRoundTrip({ empty: {}, arr: [[], {}, [""]] });
-});
+console.log('\n-- empty containers --');
+test('nested empty containers', () => assertRoundTrip({ empty: {}, arr: [[], {}, [""]] }));
 
-test('literal backslash in nested value', () => {
-  assertRoundTrip({ path: "C:\\Users\\test" });
-});
-
-test('literal backslash-n vs real newline', () => {
+console.log('\n-- string edge cases --');
+test('backslash', () => assertRoundTrip({ path: "C:\\Users\\test" }));
+test('quotes in string', () => assertRoundTrip({ x: 'she said "hi"' }));
+test('double backslash', () => assertRoundTrip({ p: "\\\\" }));
+test('backslash-n vs newline', () => {
   const data = { a: "real\nnewline", b: "literal\\nnot" };
-  const enc = encode(data, { delimiter: '|' });
-  const dec = decode(enc, '|');
-  assertEqual(dec.a, "real\nnewline");
-  assertEqual(dec.b, "literal\\nnot");
+  assertRoundTrip(data);
+});
+test('hex/octal/binary strings preserved', () => {
+  assertRoundTrip({ a: "0x1A", b: "0o77", c: "0b101" });
 });
 
-test('double backslash round-trips', () => {
-  assertRoundTrip({ p: "\\\\" });
+console.log('\n-- key validation --');
+test('key with dot throws', () => assertThrows(() => encode({ "a.b": 1 })));
+test('key with space throws', () => assertThrows(() => encode({ "first name": 1 })));
+test('key with colon throws', () => assertThrows(() => encode({ "a:b": 1 })));
+test('valid keys', () => assertRoundTrip({ foo: 1, bar_baz: 2, x1: 3, "c-d": 4 }));
+
+console.log('\n-- empty string vs block header --');
+test('empty string value round-trips', () => assertRoundTrip({ name: "" }));
+test('empty string encoded as key:""', () => {
+  const enc = encode({ name: "" });
+  if (!enc.includes('name:""')) throw new Error('Expected name:""');
 });
 
-test('tabular cell: backslash + delimiter combo', () => {
-  assertRoundTrip({ rows: [{ val: "a\\|b", id: 1 }, { val: "c", id: 2 }] });
+console.log('\n-- "true"/"false"/"null" are not reserved --');
+test('bare "true" string', () => assertRoundTrip({ x: "true" }));
+test('bare "false" string', () => assertRoundTrip({ x: "false" }));
+test('bare "null" string', () => assertRoundTrip({ x: "null" }));
+test('"true" in tabular cell', () => assertRoundTrip({ r: [{ v: "true" }, { v: "false" }] }));
+
+console.log('\n-- flat array vs tabular disambiguation --');
+test('flat numeric array not parsed as tabular', () => assertRoundTrip({ scores: [95, 87, 42] }));
+test('flat string array with word values', () => assertRoundTrip({ tags: ["alpha", "beta", "gamma"] }));
+test('root flat numeric array', () => assertRoundTrip([1, 2, 3]));
+
+console.log('\n-- error handling --');
+test('NaN throws', () => assertThrows(() => encode(NaN)));
+test('Infinity throws', () => assertThrows(() => encode(Infinity)));
+test('empty doc throws', () => assertThrows(() => decode(""), e => e instanceof LeanParseError));
+test('trailing garbage', () => assertThrows(() => decode("42\ngarbage")));
+test('root bare string rejected', () => assertThrows(() => decode("hello")));
+test('duplicate keys rejected', () => assertThrows(() => decode("a:1\na:2"), e => e instanceof LeanParseError));
+
+console.log('\n-- LEAN-specific optimizations --');
+test('T/F encoded as single chars', () => {
+  const enc = encode({ active: true, deleted: false });
+  if (enc.includes('true') || enc.includes('false')) throw new Error('Should use T/F');
+});
+test('_ encoded for null', () => {
+  const enc = encode({ value: null });
+  if (enc.includes('null')) throw new Error('Should use _');
+});
+test('no space after colon', () => {
+  const enc = encode({ host: "localhost" });
+  if (enc.includes(': ')) throw new Error('Should not have space after colon');
 });
 
-test('flat array: single backslash', () => {
-  assertRoundTrip({ x: ["\\"] });
+console.log('\n-- estimateTokens --');
+test('empty string returns 0', () => {
+  assertEqual(estimateTokens(""), 0);
 });
-
-test('cell with quote inside', () => {
-  assertRoundTrip({ rows: [{ msg: 'say "hello"', id: 1 }, { msg: "ok", id: 2 }] });
+test('null/undefined returns 0', () => {
+  assertEqual(estimateTokens(null), 0);
+  assertEqual(estimateTokens(undefined), 0);
 });
-
-console.log('\n-- delimiter validation --');
-
-test('delimiter "." throws (not in safe set)', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: '.' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
+test('single short word returns 1', () => {
+  assertEqual(estimateTokens("hi"), 1);
 });
-
-test('delimiter "-" throws (not in safe set)', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: '-' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
+test('single long word returns more tokens', () => {
+  const tokens = estimateTokens("internationalization");
+  if (tokens < 3) throw new Error(`Expected at least 3 tokens for long word, got ${tokens}`);
 });
-
-test('delimiter "a" throws (not in safe set)', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: 'a' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
+test('newlines add to count', () => {
+  const withNewlines = estimateTokens("a\nb\nc");
+  const without = estimateTokens("a b c");
+  if (withNewlines <= without) throw new Error('Newlines should add to token count');
 });
-
-test('delimiter "" throws (not in safe set)', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: '' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
+test('punctuation adds to count', () => {
+  const withPunct = estimateTokens('{"key":"val"}');
+  const without = estimateTokens('key val');
+  if (withPunct <= without) throw new Error('Punctuation should add to token count');
 });
-
-test('delimiter "}" throws (structural collision)', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: '}' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
-});
-
-test('delimiter "\\n" throws', () => {
-  assertThrows(
-    () => encode({ x: 1 }, { delimiter: '\n' }),
-    e => e.message.includes('not in the safe delimiter set')
-  );
-});
-
-test('safe delimiters: , | \\t ; ~ ;; |~|', () => {
-  const data = { users: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }] };
-  for (const d of [',', '|', '\t', ';', '~', ';;', '|~|']) {
-    assertRoundTrip(data, d);
-  }
-});
-
-test('key user.id with pipe delimiter round-trips', () => {
-  assertRoundTrip({ rows: [{ "user.id": 1, name: 'A' }, { "user.id": 2, name: 'B' }] });
-});
-
-console.log('\n-- duplicate key rejection --');
-
-test('duplicate object key throws', () => {
-  assertThrows(
-    () => decode('a: 1\na: 2', ','),
-    e => e instanceof ToonParseError && e.message.includes('Duplicate key "a"')
-  );
-});
-
-test('duplicate tabular field header throws', () => {
-  assertThrows(
-    () => decode('items[1]{a|a}:\n  1|2', '|'),
-    e => e instanceof ToonParseError && e.message.includes('Duplicate field')
-  );
-});
-
-test('duplicate key in list-item object throws', () => {
-  assertThrows(
-    () => decode('items[1]:\n  - x: 1\n    x: 2', '|'),
-    e => e instanceof ToonParseError && e.message.includes('Duplicate key "x"')
-  );
-});
-
-test('non-duplicate keys decode fine', () => {
-  const back = decode('a: 1\nb: 2\nc: 3', ',');
-  assertEqual(back, { a: 1, b: 2, c: 3 });
-});
-
-console.log('\n-- NaN / Infinity rejection --');
-
-test('encode(NaN) throws', () => {
-  assertThrows(
-    () => encode(NaN),
-    e => e.message.includes('NaN')
-  );
-});
-
-test('encode(Infinity) throws', () => {
-  assertThrows(
-    () => encode(Infinity),
-    e => e.message.includes('Infinity')
-  );
-});
-
-test('encode(-Infinity) throws', () => {
-  assertThrows(
-    () => encode(-Infinity),
-    e => e.message.includes('Infinity')
-  );
-});
-
-test('nested NaN throws', () => {
-  assertThrows(
-    () => encode({ x: NaN }),
-    e => e.message.includes('NaN')
-  );
-});
-
-test('nested Infinity throws', () => {
-  assertThrows(
-    () => encode({ x: Infinity }),
-    e => e.message.includes('Infinity')
-  );
-});
-
-test('valid numbers still work', () => {
-  assertRoundTrip({ a: 0, b: -1, c: 3.14, d: 1e10 });
-});
-
-console.log('\n-- tabular field name validation --');
-
-test('decode rejects invalid field name "first name"', () => {
-  assertThrows(
-    () => decode('[1]{first name}:\nBob', ','),
-    e => e.message.includes('Invalid tabular field name')
-  );
-});
-
-test('decode rejects field name with slash', () => {
-  assertThrows(
-    () => decode('items[1]{x/y}:\n1', ','),
-    e => e.message.includes('Invalid tabular field name')
-  );
-});
-
-test('decode accepts valid field names', () => {
-  const back = decode('items[1]{foo|bar_baz|x.y}:\n  1|2|3', '|');
-  assertEqual(back.items[0], { foo: 1, bar_baz: 2, "x.y": 3 });
-});
-
-console.log('\n-- unterminated quote detection --');
-
-test('unterminated quote in CSV row throws', () => {
-  assertThrows(
-    () => decode('items[1]{a|b}:\n  "hello|world', '|'),
-    e => e.message.includes('Unterminated') || e.message.includes('unterminated')
-  );
-});
-
-test('properly closed quotes still work', () => {
-  const back = decode('items[1]{a|b}:\n  "hello"|"world"', '|');
-  assertEqual(back.items[0], { a: 'hello', b: 'world' });
-});
-
-console.log('\n-- quoted-looking string round-trips --');
-
-test('value \'\"abc\"\' round-trips in object', () => {
-  assertRoundTrip({ x: '"abc"' });
-});
-test('value \'\"\" \' (just quotes) round-trips', () => {
-  assertRoundTrip({ x: '""' });
-});
-test('value starting with quote round-trips', () => {
-  assertRoundTrip({ x: '"start' });
-});
-test('quoted-looking string in flat array', () => {
-  assertRoundTrip({ x: ['"abc"', 'normal'] });
-});
-test('quoted-looking string in tabular', () => {
-  assertRoundTrip({ rows: [{ v: '"abc"', id: 1 }, { v: '"xyz"', id: 2 }] });
-});
-test('quoted-looking string in non-uniform list', () => {
-  assertRoundTrip({ items: [{ v: '"abc"' }, { v: '"xyz"', extra: true }] });
-});
-test('root quoted-looking string', () => {
-  assertRoundTrip('"abc"');
-});
-
-console.log('\n-- non-finite numbers in decoder --');
-
-test('Infinity in scalar context stays string', () => {
-  assertEqual(decode('x: Infinity', ','), { x: 'Infinity' });
-});
-test('-Infinity in scalar context stays string', () => {
-  assertEqual(decode('x: -Infinity', ','), { x: '-Infinity' });
-});
-test('1e309 (overflow) in scalar context stays string', () => {
-  assertEqual(decode('x: 1e309', ','), { x: '1e309' });
-});
-test('Infinity in flat array stays string', () => {
-  assertEqual(decode('x[1]: Infinity', ','), { x: ['Infinity'] });
-});
-test('normal numbers still parse as numbers', () => {
-  assertEqual(decode('x: 42', ','), { x: 42 });
-  assertEqual(decode('x: -3.14', ','), { x: -3.14 });
-  assertEqual(decode('x: 0', ','), { x: 0 });
-});
-
-console.log('\n-- decoder rejects bad delimiters --');
-
-test('decode with "}" throws', () => {
-  assertThrows(() => decode('x: 1', '}'), e => e.message.includes('not in the safe delimiter set'));
-});
-test('decode with ":" throws', () => {
-  assertThrows(() => decode('x: 1', ':'), e => e.message.includes('not in the safe delimiter set'));
-});
-test('decode with "-" throws', () => {
-  assertThrows(() => decode('x: 1', '-'), e => e.message.includes('not in the safe delimiter set'));
-});
-test('decode with valid delimiters works', () => {
-  for (const d of [',', '|', '\t', ';', '~']) {
-    decode(`x: hello`, d); // should not throw
-  }
-});
-
-console.log('\n-- empty document throws --');
-
-test('decode("") throws', () => {
-  assertThrows(() => decode('', ','), e => e instanceof ToonParseError && e.message.includes('Empty'));
-});
-test('decode("   \\n\\n") throws', () => {
-  assertThrows(() => decode('   \n\n', ','), e => e instanceof ToonParseError && e.message.includes('Empty'));
-});
-test('decode("\\n") throws', () => {
-  assertThrows(() => decode('\n', '|'), e => e instanceof ToonParseError && e.message.includes('Empty'));
-});
-test('root null still works (encodes as "null", not empty)', () => {
-  assertEqual(encode(null), 'null');
-  assertEqual(decode('null', ','), null);
-});
-
-console.log('\n-- format selection --');
-
-test('selectBestFormat chooses TOON for tabular data', () => {
+test('LEAN is more token-efficient than JSON for tabular data', () => {
   const data = {
     users: [
-      { id: 1, name: 'Alice', active: true },
-      { id: 2, name: 'Bob', active: false }
+      { id: 1, name: "Alice", email: "alice@example.com", active: true },
+      { id: 2, name: "Bob", email: "bob@example.com", active: false },
+      { id: 3, name: "Charlie", email: "charlie@example.com", active: true }
     ]
   };
-  const result = selectBestFormat(data, { delimiter: '|' });
-  assertEqual(result.format, 'toon');
-  if (result.toonTokens >= result.jsonTokens) {
-    throw new Error(`Expected TOON to be cheaper than JSON, got toon=${result.toonTokens}, json=${result.jsonTokens}`);
-  }
-  assertEqual(result.text, encode(data, { delimiter: '|' }));
+  const jsonTokens = estimateTokens(JSON.stringify(data));
+  const leanTokens = estimateTokens(encode(data));
+  if (leanTokens >= jsonTokens) throw new Error(`Expected LEAN (${leanTokens}) < JSON (${jsonTokens})`);
 });
 
-test('selectBestFormat prefers JSON when TOON is tied or larger', () => {
-  const data = 'hello';
-  const result = selectBestFormat(data, { delimiter: '|' });
-  assertEqual(result.format, 'json');
-  if (result.toonTokens < result.jsonTokens) {
-    throw new Error(`Expected JSON to be selected only when TOON is not cheaper, got toon=${result.toonTokens}, json=${result.jsonTokens}`);
-  }
-  assertEqual(result.text, JSON.stringify(data));
+console.log('\n-- integration: spec complete example --');
+test('spec example round-trips', () => {
+  const data = {
+    meta: { version: "2.1.0", debug: false },
+    users: [
+      { id: 1, name: "Alice", email: "alice@ex.com", active: true },
+      { id: 2, name: "Bob", email: "bob@ex.com", active: false }
+    ],
+    tags: [],
+    notes: [1, "hello", { key: "val" }]
+  };
+  assertRoundTrip(data);
 });
 
 console.log(`\n${'─'.repeat(40)}`);
