@@ -272,3 +272,199 @@ const DATASETS = [
     questions: [],
   },
 ];
+
+// --- Phase 1: Efficiency & Round-trip ---
+function runPhase1() {
+  console.log('\n' + '='.repeat(70));
+  console.log('PHASE 1: Efficiency & Round-trip');
+  console.log('='.repeat(70));
+
+  const allResults = [];
+
+  for (const dataset of DATASETS) {
+    console.log(`\nDataset: ${dataset.name} (${dataset.description})`);
+    console.log(`  ${'Format'.padEnd(20)} ${'Tokens'.padStart(8)} ${'Bytes'.padStart(8)} ${'vs JSON'.padStart(10)} ${'Round-trip'.padStart(12)}`);
+    console.log(`  ${'-'.repeat(60)}`);
+
+    let baselineTokens = 0;
+    const datasetResults = [];
+
+    for (const format of FORMATS) {
+      let encoded, decoded, tokens, bytes, roundTrip;
+
+      try {
+        encoded = format.encode(dataset.data);
+        tokens = estimateTokens(encoded);
+        bytes = Buffer.byteLength(encoded, 'utf8');
+      } catch (e) {
+        console.log(`  ${format.name.padEnd(20)} ${'n/a'.padStart(8)} ${'n/a'.padStart(8)} ${'n/a'.padStart(10)} ${'n/a'.padStart(12)}`);
+        datasetResults.push({ format: format.name, tokens: null, bytes: null, savings: null, roundTrip: null });
+        continue;
+      }
+
+      try {
+        decoded = format.decode(encoded);
+        roundTrip = deepEqual(decoded, dataset.data);
+      } catch (e) {
+        roundTrip = false;
+      }
+
+      if (format.name === 'JSON compact') baselineTokens = tokens;
+
+      const savings = format.name === 'JSON compact' ? 'baseline'
+        : baselineTokens === 0 ? 'n/a'
+        : `${(((tokens - baselineTokens) / baselineTokens) * 100).toFixed(1)}%`;
+
+      const rtLabel = roundTrip ? 'PASS' : 'FAIL';
+      console.log(`  ${format.name.padEnd(20)} ${String(tokens).padStart(8)} ${String(bytes).padStart(8)} ${String(savings).padStart(10)} ${rtLabel.padStart(12)}`);
+
+      datasetResults.push({ format: format.name, tokens, bytes, savings, roundTrip });
+    }
+
+    allResults.push({ dataset: dataset.name, description: dataset.description, results: datasetResults });
+  }
+
+  // Summary averages
+  console.log('\n' + '='.repeat(70));
+  console.log('SUMMARY: Average savings vs JSON compact');
+  console.log('='.repeat(70));
+
+  for (const format of FORMATS) {
+    if (format.name === 'JSON compact') continue;
+    const savingsList = [];
+    let roundTripAll = true;
+    for (const dr of allResults) {
+      const r = dr.results.find(r => r.format === format.name);
+      const baseline = dr.results.find(r => r.format === 'JSON compact');
+      if (r && r.tokens !== null && baseline && baseline.tokens !== null && baseline.tokens > 0) {
+        savingsList.push(((r.tokens - baseline.tokens) / baseline.tokens) * 100);
+      }
+      if (r && r.roundTrip !== true) roundTripAll = false;
+    }
+    const avg = savingsList.length > 0 ? (savingsList.reduce((a, b) => a + b, 0) / savingsList.length).toFixed(1) : 'n/a';
+    const rtSummary = roundTripAll ? 'ALL PASS' : 'SOME FAIL';
+    console.log(`  ${format.name.padEnd(20)} avg ${String(avg).padStart(7)}%   round-trip: ${rtSummary}`);
+  }
+
+  return allResults;
+}
+
+// --- Phase 2: LLM Comprehension ---
+async function runPhase2() {
+  console.log('\n' + '='.repeat(70));
+  console.log(`PHASE 2: LLM Comprehension (${MODEL})`);
+  console.log('='.repeat(70));
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    console.log('\n  WARNING: ANTHROPIC_API_KEY not set. Skipping Phase 2.');
+    return null;
+  }
+
+  const { default: Anthropic } = await import('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey });
+
+  const datasetsWithQuestions = DATASETS.filter(d => d.questions.length > 0);
+  const scoreboard = {};
+
+  for (const format of FORMATS) {
+    scoreboard[format.name] = { correct: 0, total: 0, misses: [] };
+  }
+
+  for (const dataset of datasetsWithQuestions) {
+    console.log(`\n  Dataset: ${dataset.name}`);
+
+    for (const format of FORMATS) {
+      let encoded;
+      try {
+        encoded = format.encode(dataset.data);
+      } catch {
+        for (const q of dataset.questions) {
+          scoreboard[format.name].total++;
+          scoreboard[format.name].misses.push({ dataset: dataset.name, question: q.text, reason: 'encode failed' });
+        }
+        continue;
+      }
+
+      for (const q of dataset.questions) {
+        scoreboard[format.name].total++;
+        const prompt = `Here is data encoded in ${format.name} format:\n\n${encoded}\n\nQuestion: ${q.text}\nAnswer with ONLY the answer value, nothing else.`;
+
+        let answer = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const response = await client.messages.create({
+              model: MODEL,
+              max_tokens: 100,
+              temperature: 0,
+              messages: [{ role: 'user', content: prompt }],
+            });
+            answer = response.content[0].text.trim();
+            break;
+          } catch (e) {
+            if (attempt === 1) {
+              scoreboard[format.name].misses.push({ dataset: dataset.name, question: q.text, reason: `API error: ${e.message}` });
+            }
+          }
+        }
+
+        if (answer !== null) {
+          if (answersMatch(answer, q.expected)) {
+            scoreboard[format.name].correct++;
+          } else {
+            scoreboard[format.name].misses.push({ dataset: dataset.name, question: q.text, expected: q.expected, got: answer });
+          }
+        }
+      }
+    }
+    process.stdout.write('.');
+  }
+
+  // Print results
+  console.log('\n\n  ' + '-'.repeat(55));
+  console.log(`  ${'Format'.padEnd(20)} ${'Correct'.padStart(10)} ${'Total'.padStart(8)} ${'Accuracy'.padStart(10)}`);
+  console.log('  ' + '-'.repeat(55));
+
+  for (const format of FORMATS) {
+    const s = scoreboard[format.name];
+    const pct = s.total > 0 ? ((s.correct / s.total) * 100).toFixed(1) + '%' : 'n/a';
+    console.log(`  ${format.name.padEnd(20)} ${`${s.correct}/${s.total}`.padStart(10)} ${String(s.total).padStart(8)} ${pct.padStart(10)}`);
+  }
+
+  // Print misses
+  const allMisses = FORMATS.flatMap(f => scoreboard[f.name].misses.map(m => ({ format: f.name, ...m })));
+  if (allMisses.length > 0) {
+    console.log('\n  Misses:');
+    for (const m of allMisses) {
+      if (m.reason) {
+        console.log(`    ${m.format} | ${m.dataset} | ${m.question} | ${m.reason}`);
+      } else {
+        console.log(`    ${m.format} | ${m.dataset} | ${m.question} | expected: ${m.expected} | got: ${m.got}`);
+      }
+    }
+  }
+
+  return scoreboard;
+}
+
+// --- Main ---
+async function main() {
+  let phase1Results = null;
+  let phase2Results = null;
+
+  if (!llmOnly) {
+    phase1Results = runPhase1();
+  }
+
+  if (!skipLlm) {
+    phase2Results = await runPhase2();
+  }
+
+  // Write results to JSON
+  const output = { timestamp: new Date().toISOString(), phase1: phase1Results, phase2: phase2Results };
+  const fs = await import('fs');
+  fs.writeFileSync('benchmark-results.json', JSON.stringify(output, null, 2));
+  console.log('\nResults written to benchmark-results.json');
+}
+
+main().catch(e => { console.error(e); process.exit(1); });

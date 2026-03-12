@@ -1,0 +1,414 @@
+{
+  "timestamp": "2026-03-12T11:37:51.378Z",
+  "phase1": [
+    {
+      "dataset": "small-tabular",
+      "description": "3 rows, 4 fields",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 89,
+          "bytes": 210,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 45,
+          "bytes": 131,
+          "savings": "-49.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 49,
+          "bytes": 131,
+          "savings": "-44.9%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 42,
+          "bytes": 115,
+          "savings": "-52.8%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "medium-tabular",
+      "description": "20 rows, 6 fields",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 760,
+          "bytes": 1828,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 276,
+          "bytes": 786,
+          "savings": "-63.7%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 289,
+          "bytes": 775,
+          "savings": "-62.0%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 229,
+          "bytes": 553,
+          "savings": "-69.9%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "large-tabular",
+      "description": "100 rows, 5 fields",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 3868,
+          "bytes": 9459,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 1257,
+          "bytes": 3997,
+          "savings": "-67.5%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 1538,
+          "bytes": 4147,
+          "savings": "-60.2%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 880,
+          "bytes": 2243,
+          "savings": "-77.2%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "nested-config",
+      "description": "3 levels deep, no arrays",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 107,
+          "bytes": 256,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 87,
+          "bytes": 277,
+          "savings": "-18.7%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 78,
+          "bytes": 223,
+          "savings": "-27.1%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 67,
+          "bytes": 200,
+          "savings": "-37.4%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "mixed",
+      "description": "tabular + nested in same object",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 150,
+          "bytes": 360,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 79,
+          "bytes": 226,
+          "savings": "-47.3%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 89,
+          "bytes": 225,
+          "savings": "-40.7%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 75,
+          "bytes": 208,
+          "savings": "-50.0%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "single-field",
+      "description": "array of objects with 1 field each",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 50,
+          "bytes": 107,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 20,
+          "bytes": 62,
+          "savings": "-60.0%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 20,
+          "bytes": 52,
+          "savings": "-60.0%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 19,
+          "bytes": 52,
+          "savings": "-62.0%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "deep-nesting",
+      "description": "4+ levels with arrays at each level",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 167,
+          "bytes": 361,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 113,
+          "bytes": 409,
+          "savings": "-32.3%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 128,
+          "bytes": 341,
+          "savings": "-23.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 102,
+          "bytes": 274,
+          "savings": "-38.9%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "wide-rows",
+      "description": "15+ fields per object",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 332,
+          "bytes": 776,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 138,
+          "bytes": 405,
+          "savings": "-58.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 153,
+          "bytes": 421,
+          "savings": "-53.9%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 135,
+          "bytes": 388,
+          "savings": "-59.3%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "flat-scalar-array",
+      "description": "array of numbers/strings",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 49,
+          "bytes": 110,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 39,
+          "bytes": 99,
+          "savings": "-20.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 38,
+          "bytes": 94,
+          "savings": "-22.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 36,
+          "bytes": 92,
+          "savings": "-26.5%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "sparse-irregular",
+      "description": "non-uniform objects (different keys)",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 132,
+          "bytes": 335,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 102,
+          "bytes": 348,
+          "savings": "-22.7%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 105,
+          "bytes": 296,
+          "savings": "-20.5%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 76,
+          "bytes": 229,
+          "savings": "-42.4%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "text-heavy",
+      "description": "long string values in tabular rows",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 250,
+          "bytes": 808,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 199,
+          "bytes": 717,
+          "savings": "-20.4%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 212,
+          "bytes": 729,
+          "savings": "-15.2%",
+          "roundTrip": true
+        },
+        {
+          "format": "ZON",
+          "tokens": 203,
+          "bytes": 717,
+          "savings": "-18.8%",
+          "roundTrip": true
+        }
+      ]
+    },
+    {
+      "dataset": "edge-cases",
+      "description": "empty arrays, null values, booleans",
+      "results": [
+        {
+          "format": "JSON compact",
+          "tokens": 66,
+          "bytes": 142,
+          "savings": "baseline",
+          "roundTrip": true
+        },
+        {
+          "format": "TOON (pipe)",
+          "tokens": 53,
+          "bytes": 133,
+          "savings": "-19.7%",
+          "roundTrip": true
+        },
+        {
+          "format": "ASON",
+          "tokens": 39,
+          "bytes": 94,
+          "savings": "-40.9%",
+          "roundTrip": false
+        },
+        {
+          "format": "ZON",
+          "tokens": 41,
+          "bytes": 98,
+          "savings": "-37.9%",
+          "roundTrip": true
+        }
+      ]
+    }
+  ],
+  "phase2": null
+}
