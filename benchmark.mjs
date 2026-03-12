@@ -1,6 +1,7 @@
 import { encode as toonEncode, decode as toonDecode, estimateTokens } from './dist/toon.js';
 import { SmartCompressor } from '@ason-format/ason';
 import { encode as zonEncode, decode as zonDecode } from 'zon-format';
+import { encode as leanEncode, decode as leanDecode } from './dist/lean.js';
 
 // --- CLI flags ---
 const args = process.argv.slice(2);
@@ -32,6 +33,11 @@ const FORMATS = [
     name: 'ZON',
     encode: (d) => zonEncode(d),
     decode: (t) => zonDecode(t),
+  },
+  {
+    name: 'LEAN',
+    encode: (d) => leanEncode(d),
+    decode: (t) => leanDecode(t),
   },
 ];
 

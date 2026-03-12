@@ -5,6 +5,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { decode, encode, estimateTokens, selectBestFormat } from "./toon.js";
 import type { EncodeOptions, ToonValue } from "./toon.js";
+import { SmartCompressor } from "@ason-format/ason";
+import { encode as zonEncode } from "zon-format";
+import { encode as leanEncode } from "./lean.js";
 
 const VERSION = "1.2.0";
 
@@ -256,7 +259,23 @@ Returns:
       const toonTab = encode(data, { delimiter: "\t" });
       const toonStrict = encode(data, { delimiter: ",", strict: true });
 
-      const formats = [
+      let asonText: string | null = null;
+      try {
+        const compressor = new SmartCompressor();
+        asonText = compressor.compress(data);
+      } catch {}
+
+      let zonText: string | null = null;
+      try {
+        zonText = zonEncode(data);
+      } catch {}
+
+      let leanText: string | null = null;
+      try {
+        leanText = leanEncode(data);
+      } catch {}
+
+      const formats: { name: string; text: string }[] = [
         { name: "JSON (compact)", text: jsonCompact },
         { name: "JSON (pretty)", text: jsonPretty },
         { name: "TOON (comma)", text: toonComma },
@@ -264,6 +283,9 @@ Returns:
         { name: "TOON (pipe)", text: toonPipe },
         { name: "TOON (tab)", text: toonTab },
       ];
+      if (asonText !== null) formats.push({ name: "ASON", text: asonText });
+      if (zonText !== null) formats.push({ name: "ZON", text: zonText });
+      if (leanText !== null) formats.push({ name: "LEAN", text: leanText });
 
       const stats = formats.map((format) => ({
         name: format.name,
