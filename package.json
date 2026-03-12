@@ -1,5 +1,5 @@
 {
-  "name": "toon-mcp-server",
+  "name": "@fiialkod/toon-mcp-server",
   "version": "1.2.0",
   "description": "MCP server providing TOON format encoding/decoding for token-efficient LLM data exchange",
   "type": "module",
@@ -11,7 +11,8 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch",
-    "test": "npm run build && node test.mjs"
+    "test": "npm run build && node test.mjs",
+    "benchmark": "npm run build && node benchmark.mjs"
   },
   "keywords": [
     "mcp",
@@ -21,10 +22,13 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@ason-format/ason": "^2.0.0-preview",
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "zod": "^3.25.32"
+    "zod": "^3.25.32",
+    "zon-format": "^1.3.1"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@types/node": "^25.4.0",
     "typescript": "^5.8.3"
   }
